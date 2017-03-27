@@ -5,22 +5,18 @@ from __future__ import print_function
 
 import numpy as np
 import time
-import sys
-import os
 import cPickle
 
 import xgboost as xgb
 import matplotlib.pyplot as plt
-import theano
 
-# from sklearn.metrics import mean_squared_error
-from sklearn.ensemble import RandomForestRegressor
-
+# from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout
-from keras.layers.recurrent import DropoutLSTM
-from keras.callbacks import ModelCheckpoint, ModelTest
+# from keras.layers.embeddings import Embedding
+from keras.layers.recurrent import LSTM  # , GRU, SimpleRNN
 from keras.regularizers import l2
+from keras.layers.normalization import BatchNormalization
 
 from reader import read_data_sets, concatenate_time_steps, construct_time_steps
 from missing_value_processer import missing_check
@@ -75,31 +71,31 @@ pollution_site_map = {
 high_alert = 53.5
 low_alert = 35.5
 
-# local = '北部'
-# city = '台北'
-# site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
-# target_site = '萬華'
+local = '北部'
+city = '台北'
+site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
+target_site = '萬華'
+
+training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
+testing_year = ['2017', '2017']
+
+training_duration = ['1/1', '12/31']
+testing_duration = ['1/1', '1/31']
+interval_hours = 8  # predict the label of average data of many hours later, default is 1
+is_training = True
+
+# local = os.sys.argv[1]
+# city = os.sys.argv[2]
+# site_list = pollution_site_map[local][city]
+# target_site = os.sys.argv[3]
 #
-# training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
-# testing_year = ['2017', '2017']
+# training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
+# testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
 #
-# training_duration = ['1/1', '12/31']
-# testing_duration = ['1/1', '1/31']
-# interval_hours = 6  # predict the label of average data of many hours later, default is 1
-# is_training = False
-
-local = os.sys.argv[1]
-city = os.sys.argv[2]
-site_list = pollution_site_map[local][city]
-target_site = os.sys.argv[3]
-
-training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
-testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
-
-training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
-testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
-interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
-is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
+# training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
+# testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
+# interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
+# is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
 
 
 # clear redundancy work
@@ -118,9 +114,13 @@ for i in range(rangeofYear):
 
 # Training Parameters
 # WIND_DIREC is a specific feature, that need to be processed, and it can only be element of input vector now.
-pollution_kind = ['PM2.5', 'O3', 'AMB_TEMP', 'RH', 'WIND_SPEED', 'WIND_DIREC']
-target_kind = 'PM2.5'
-data_update = False
+# target_kind = 'PM2.5'
+target_kind = 'O3'
+if target_kind == 'PM2.5':
+    pollution_kind = ['PM2.5', 'O3', 'AMB_TEMP', 'RH', 'WIND_SPEED', 'WIND_DIREC']
+elif target_kind == 'O3':
+    pollution_kind = ['O3', 'NOx']
+data_update = True
 # batch_size = 24 * 7
 seed = 0
 
@@ -132,10 +132,10 @@ time_steps = 12
 output_size = 1
 
 testing_month = testing_duration[0][:testing_duration[0].index('/')]
-folder = root_path+"model/%s/%s/%sh/" % (local, city, interval_hours)
+folder = root_path+"model/%s/%s/%sh/%s/" % (local, city, interval_hours, target_kind)
 training_begining = training_duration[0][:training_duration[0].index('/')]
 training_deadline = training_duration[-1][:training_duration[-1].index('/')]
-
+print('site: %s' % target_site)
 print('Training for %s/%s to %s/%s' % (training_year[0], training_duration[0], training_year[-1], training_duration[-1]))
 print('Testing for %s/%s to %s/%s' % (testing_year[0], testing_duration[0], testing_year[-1], testing_duration[-1]))
 
@@ -228,7 +228,7 @@ if is_training:
     Y_train = [(y - mean_y_train) / std_y_train for y in Y_train]
     print('mean_y_train: %f  std_y_train: %f' % (mean_y_train, std_y_train))
 
-    fw = open(folder + "parameter.pickle", 'wb')
+    fw = open(folder + "%s_parameter.pickle" % target_site, 'wb')
     cPickle.dump(str(mean_X_train) + ',' +
                  str(std_X_train) + ',' +
                  str(mean_y_train) + ',' +
@@ -269,8 +269,13 @@ if is_training:
     X_test = concatenate_time_steps(X_test[:-1], time_steps)
     Y_test = Y_test[time_steps:]
 
-    [X_train, Y_train] = higher(X_train, Y_train, interval_hours)
-    [X_test, Y_test] = higher(X_test, Y_test, interval_hours)
+    if target_kind == 'PM2.5':
+        [X_train, Y_train] = higher(X_train, Y_train, interval_hours)
+        [X_test, Y_test] = higher(X_test, Y_test, interval_hours)
+    elif target_kind == 'O3':
+        [X_train, Y_train] = ave(X_train, Y_train, interval_hours)
+        [X_test, Y_test] = ave(X_test, Y_test, interval_hours)
+
     X_rnn_train = X_rnn_train[:len(X_train)]
     X_rnn_test = X_rnn_test[:len(X_test)]
 
@@ -303,7 +308,7 @@ if is_training:
 
 else:  # is_training = false
     # mean and std
-    fr = open(folder + "parameter.pickle", 'rb')
+    fr = open(folder + "%s_parameter.pickle" % target_site, 'rb')
     [mean_X_train, std_X_train, mean_y_train, std_y_train] = (cPickle.load(fr)).split(',')
     mean_X_train = mean_X_train.replace('[', '').replace(']', '').replace('\n', '').split(' ')
     while '' in mean_X_train:
@@ -356,7 +361,11 @@ else:  # is_training = false
     X_test = concatenate_time_steps(X_test[:-1], time_steps)
     Y_test = Y_test[time_steps:]
 
-    [X_test, Y_test] = higher(X_test, Y_test, interval_hours)
+    if target_kind == 'PM2.5':
+        [X_test, Y_test] = higher(X_test, Y_test, interval_hours)
+    elif target_kind == 'O3':
+        [X_test, Y_test] = ave(X_test, Y_test, interval_hours)
+
     X_rnn_test = X_rnn_test[:len(X_test)]
 
     # delete data which have missing values
@@ -421,55 +430,73 @@ filename = ("sa_DropoutLSTM_%s_training_%s_m%s_to_%s_m%s_interval_%s"
             % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours))
 print(filename)
 
-sys.path.insert(0, "/usr/local/cuda-7.5/bin")
-sys.path.insert(0, root_path + "keras-BayesianRNN")  # point this to your local fork of https://github.com/yaringal/keras
-sys.path.insert(0, "../Theano")
-
-theano.config.mode = 'FAST_RUN'
-theano.config.optimizer = 'fast_run'
-theano.config.reoptimize_unpickled_function = False
-
+# Network Parameters
+time_steps = 12
 hidden_size = 20
 
-param = ["", "0.5", "0.5", "0.5", "0.5", "1e-6", "128", "200"]
+# if len(sys.argv) == 1:
+#     print("Expected args: p_W, p_U, p_dense, p_emb, weight_decay, batch_size, maxlen")
+#     print("Using default args:")
+#     sys.argv = ["", "0.5", "0.5", "0.5", "0.5", "1e-6", "128", "200"]
+print("Expected args: p_W, p_U, p_dense, p_emb, weight_decay, batch_size")
+print("Using default args:")
+param = ["", "0.5", "0.5", "0.5", "0.5", "1e-6", "128"]
+# sys.argv = ["", "0.25", "0.25", "0.25", "0.25", "1e-4", "128"]
+# args = [float(a) for a in sys.argv[1:]]
 args = [float(a) for a in param[1:]]
-# print(args)
-p_W, p_U, p_dense, p_emb, weight_decay, batch_size, maxlen = args
+print(args)
+p_W, p_U, p_dense, p_emb, weight_decay, batch_size = args
 batch_size = int(batch_size)
-maxlen = int(maxlen)
 
 # --
 
 print('Build rnn model...')
 start_time = time.time()
 rnn_model = Sequential()
-rnn_model.add(DropoutLSTM(input_size, hidden_size, truncate_gradient=maxlen, W_regularizer=l2(weight_decay),
-                          U_regularizer=l2(weight_decay),
-                          b_regularizer=l2(weight_decay),
-                          p_W=p_W, p_U=p_U))
+
+# layer 1
+rnn_model.add(BatchNormalization(epsilon=0.001, mode=0, axis=-1, momentum=0.99, weights=None, beta_init='zero',
+                                 gamma_init='one', gamma_regularizer=None, beta_regularizer=None,
+                                 input_shape=(time_steps, input_size)))
+rnn_model.add(LSTM(hidden_size, W_regularizer=l2(weight_decay), U_regularizer=l2(weight_decay),
+                   b_regularizer=l2(weight_decay), dropout_W=p_W, dropout_U=p_U))  # return_sequences=True
 rnn_model.add(Dropout(p_dense))
-rnn_model.add(Dense(hidden_size, output_size, W_regularizer=l2(weight_decay), b_regularizer=l2(weight_decay)))
+
+# layer 2
+# rnn_model.add(BatchNormalization(epsilon=0.001, mode=0, axis=-1, momentum=0.99, weights=None, beta_init='zero',
+#                                  gamma_init='one', gamma_regularizer=None, beta_regularizer=None))
+# rnn_model.add(LSTM(hidden_size, W_regularizer=l2(weight_decay), U_regularizer=l2(weight_decay),
+#                    b_regularizer=l2(weight_decay), dropout_W=p_W, dropout_U=p_U))
+# rnn_model.add(Dropout(p_dense))
+
+# output layer
+rnn_model.add(BatchNormalization(epsilon=0.001, mode=0, axis=-1, momentum=0.99, weights=None, beta_init='zero',
+                                 gamma_init='one', gamma_regularizer=None, beta_regularizer=None))
+rnn_model.add(Dense(output_size, W_regularizer=l2(weight_decay), b_regularizer=l2(weight_decay)))
 
 # optimiser = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=False)
 optimiser = 'adam'
 rnn_model.compile(loss='mean_squared_error', optimizer=optimiser)
+
 final_time = time.time()
 time_spent_printer(start_time, final_time)
 
+
 if is_training:
-    print('training rnn ..')
+    print("Train...")
     start_time = time.time()
-    checkpointer = ModelCheckpoint(filepath=folder+filename+".hdf5",
-                verbose=1, append_epoch_name=False, save_every_X_epochs=10)
-    modeltest_1 = ModelTest(X_rnn_train[:100], mean_y_train + std_y_train * np.atleast_2d(Y_train[:100]).T,
-                            test_every_X_epochs=1, verbose=0, loss='euclidean',
-                            mean_y_train=mean_y_train, std_y_train=std_y_train, tau=0.1)
-    modeltest_2 = ModelTest(X_rnn_test, np.atleast_2d(Y_test).T, test_every_X_epochs=1, verbose=0, loss='euclidean',
-                            mean_y_train=mean_y_train, std_y_train=std_y_train, tau=0.1)
-    rnn_model.fit(X_rnn_train, Y_train, batch_size=batch_size, nb_epoch=51,
-                  callbacks=[checkpointer, modeltest_1, modeltest_2])
+    rnn_model.fit(X_rnn_train, Y_train, batch_size=batch_size, epochs=50)
+
+    # Potentially save weights
+    rnn_model.save_weights(folder + filename, overwrite=True)
+
+    final_time = time.time()
+    time_spent_printer(start_time, final_time)
+
 else:
-    rnn_model.load_weights(folder + filename + ".hdf5")
+    print('loading model ..')
+    # print('loading model from %s' % (folder + filename + ".hdf5"))
+    rnn_model.load_weights(folder + filename)
 
 rnn_pred = rnn_model.predict(X_rnn_test, batch_size=500, verbose=1)
 final_time = time.time()
@@ -505,7 +532,7 @@ for element in range(len(Y_test)):
     if Y_test[element] > high_alert:
         Y_alert_test[element] = 1  # [1, 0] = [high, low]
 
-print('training ensemble ..')
+print('\n- ensemble -')
 filename = ("ensemble_%s_training_%s_m%s_to_%s_m%s_interval_%s"
             % (target_site, training_year[0], training_begining, training_year[-1], training_deadline, interval_hours))
 filename2 = ("classification_%s_training_%s_m%s_to_%s_m%s_interval_%s"
@@ -618,18 +645,51 @@ alert_a = 0.0
 alert_b = 0.0
 alert_c = 0.0
 alert_d = 0.0
+integration_a = 0.0
+integration_b = 0.0
+integration_c = 0.0
+integration_d = 0.0
 
 for each_value in range(len(Y_test)):
     if Y_test[each_value] >= high_alert:  # observation high
+        # regression
         if predictions[each_value] >= high_alert:  # forecast high(with tolerance)
             ha += 1
         else:
             hc += 1
+
+        # classification
+        if alert_pred[each_value]:  # [1, 0] = [high, low]
+            alert_a += 1
+        else:
+            alert_c += 1
+
+        # integration
+        if alert_pred[each_value] or (predictions[each_value] >= high_alert):
+            integration_a += 1
+        else:
+            integration_c += 1
+
     else:  # observation low
+        # regression
         if predictions[each_value] >= high_alert:
             hb += 1
         else:
             hd += 1
+
+        # classification
+        if alert_pred[each_value]:
+            alert_b += 1
+        else:
+            alert_d += 1
+
+        # integration
+        if alert_pred[each_value] or (predictions[each_value] >= high_alert):
+            integration_b += 1
+        else:
+            integration_d += 1
+
+    # --------------------------------------------------------
 
     if Y_test[each_value] >= low_alert:  # observation higher
         if predictions[each_value] >= low_alert:
@@ -642,16 +702,6 @@ for each_value in range(len(Y_test)):
         else:
             ld += 1
 
-    if Y_test[each_value] >= high_alert:  # observation high
-        if alert_pred[each_value]:  # [1, 0] = [high, low]
-            alert_a += 1
-        else:
-            alert_c += 1
-    else:  # observation low
-        if alert_pred[each_value]:
-            alert_b += 1
-        else:
-            alert_d += 1
 
 # print('Two level accuracy: %f' % (two_label_true / (two_label_true + two_label_false)))
 print('high label: (%d, %d, %d, %d)' % (ha, hb, hc, hd))
@@ -664,27 +714,46 @@ plt.xticks(np.arange(0, len(predictions), 24))
 plt.yticks(np.arange(0, max(Y_test), 10))
 plt.grid(True)
 plt.rc('axes', labelsize=4)
+# set('fontsize', 30)
 # plt.show()
 
 
 if True:  # is_training:
     print('Writing result ..')
-    with open(root_path + 'result/%s/%s/%s_training_%s_m%s_to_%s_m%s_testing_%s_m%s_ave%d.ods' % (local, city, target_site, training_year[0], training_begining, training_year[-1], training_deadline, testing_year[0], testing_month, interval_hours), 'wt') as f:
+    with open(root_path + 'result/%s/%s/%s/%s_training_%s_m%s_to_%s_m%s_testing_%s_m%s_ave%d.ods' % (local, city, target_kind, target_site, training_year[0], training_begining, training_year[-1], training_deadline, testing_year[0], testing_month, interval_hours), 'wt') as f:
         print('RMSE: %f' % (np.sqrt(np.mean((Y_test - predictions)**2))), file=f)
         f.write('\n')
         print('Ten level accuracy: %f' % (pred_label_true / (pred_label_true + pred_label_false)), file=f)
         f.write('\n')
         print('Four level accuracy: %f' % (four_label_true / (four_label_true + four_label_false)), file=f)
         f.write('\n')
-        print('alert:, %d, %d, %d, %d' % (alert_a, alert_b, alert_c, alert_d), file=f)
+        print('alert_classification:, %d, %d, %d, %d' % (alert_a, alert_b, alert_c, alert_d), file=f)
         f.write('\n')
         # print('Two level accuracy: %f' % (two_label_true / (two_label_true + two_label_false)), file=f)
         # f.write('\n')
-        print('high label:, %d, %d, %d, %d' % (ha, hb, hc, hd), file=f)
+        print('alert_regression:, %d, %d, %d, %d' % (ha, hb, hc, hd), file=f)
+        f.write('\n')
+        print('alert_interation:, %d, %d, %d, %d' % (integration_a, integration_b, integration_c, integration_d), file=f)
         f.write('\n')
         print('low label:, %d, %d, %d, %d' % (la, lb, lc, ld), file=f)
         f.write('\n')
+        try:
+            print('precision:, %f' % (integration_a / (integration_a + integration_b)), file=f)
+        except:
+            print('precision:, -1', file=f)
+        f.write('\n')
+        try:
+            print('recall:, %f' % (integration_a / (integration_a + integration_c)), file=f)
+        except:
+            print('recall:, -1', file=f)
+        f.write('\n')
+        try:
+            print('f1 score:, %f' % ((2 * (integration_a / (integration_a + integration_b)) * (integration_a / (integration_a + integration_c))) / ((integration_a / (integration_a + integration_b)) + (integration_a / (integration_a + integration_c)))),
+                  file=f)
+        except:
+            print('f1 score:, -1', file=f)
+        f.write('\n')
     print('Writing result .. ok')
-    plt.savefig(root_path + 'result/%s/%s/%s_training_%s_m%s_to_%s_m%s_testing_%s_m%s_ave%d.png' % (local, city, target_site, training_year[0], training_begining, training_year[-1], training_deadline, testing_year[0], testing_month, interval_hours), dpi=100)
+    plt.savefig(root_path + 'result/%s/%s/%s/%s_training_%s_m%s_to_%s_m%s_testing_%s_m%s_ave%d.png' % (local, city, target_kind, target_site, training_year[0], training_begining, training_year[-1], training_deadline, testing_year[0], testing_month, interval_hours), dpi=100)
 else:
     plt.show()

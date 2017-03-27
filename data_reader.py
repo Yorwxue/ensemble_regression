@@ -167,73 +167,73 @@ def data_reader(start_year, last_year, path=root_path+'dataset/', update=False):
         print('--------------------------------------------------------------------------------------')
 
         # # ---------- weather ----------
-        # num_weather_property = 13
-        # # num_sites = 449
-        #
-        # weather_data = []
-        # load_all(weather_data, path+'Data_of_Weather/')
-        #
-        # for file_i in np.arange(len(weather_data)):
-        #     # sorting by date -> site -> param_code
-        #     for line_j in np.arange(len(weather_data[file_i])):
-        #         [year, _, date, angle] = time_to_angle(weather_data[file_i][line_j][2].replace(' 00:00:00', ''))
-        #
-        #         format_day_order = angle/360.
-        #         weather_data[file_i][line_j].append(int(year) + format_day_order)
-        #         weather_data[file_i][line_j][0] = int(weather_data[file_i][line_j][0])
-        #
-        #     weather_data[file_i] = sorted(weather_data[file_i], key=itemgetter(len(weather_data[file_i][line_j])-1, 0, 1))
-        #
-        #     print('Sorted complete.')
-        #
-        #     keep_date = ''
-        #     keep_site = ''
-        #     for line_j in np.arange(len(weather_data[file_i])):
-        #         # a new site
-        #         if weather_data[file_i][line_j][0] != keep_site:
-        #             if keep_site != '':
-        #                 y_d_h_data[year][date]['weather'][keep_site] = weather_vector
-        #                 print(year + '/' + date + ': site- %s' % keep_site)
-        #             keep_site = weather_data[file_i][line_j][0]
-        #
-        #             weather_vector = []
-        #
-        #
-        #         # a new day
-        #         if weather_data[file_i][line_j][2].replace(' 00:00:00', '') != keep_date:
-        #             if keep_date != '' and len(weather_vector) != 0:
-        #                 y_d_h_data[year][date]['weather'][keep_site] = weather_vector
-        #                 print(year + '/' + date + ': site- %s' % keep_site)
-        #
-        #             keep_date = weather_data[file_i][line_j][2].replace(' 00:00:00', '')
-        #             year = keep_date[:keep_date.find('/')]
-        #             date = keep_date[keep_date.find('/')+1:]
-        #
-        #             # check/create year dict., ex: 2016, 2015
-        #             if not (year in y_d_h_data):
-        #                 y_d_h_data[year] = dict()
-        #             # check/create date dict., ex: 1/1, 10/31
-        #             if not (date in y_d_h_data[year]):
-        #                 y_d_h_data[year][date] = dict()
-        #             # weather sites dict.
-        #             if not('weather' in y_d_h_data[year][date]):
-        #                 y_d_h_data[year][date]['weather'] = dict()
-        #
-        #             weather_vector = []
-        #
-        #         # Initiate weather_vector, when 'a new day' or 'a new site'.
-        #         if len(weather_vector) == 0:
-        #             for each_hour in np.arange(24):
-        #                 weather_vector.append(['-' for i in np.arange(num_weather_property)])
-        #
-        #         # collecting data
-        #         for each_hour in np.arange(24):
-        #             weather_vector[each_hour][param_code_to_param_code_no(weather_data[file_i][line_j][1])] \
-        #                 = weather_data[file_i][line_j][3+each_hour]  # the first three element mean site, param_code and date
-        #
-        #         if line_j == len(weather_data[file_i])-1:  # the last day
-        #             y_d_h_data[year][date]['weather'][keep_site] = weather_vector
-        #     print('----')
+        num_weather_property = 13
+        # num_sites = 449
+
+        weather_data = []
+        load_all(weather_data, path+'Data_of_Weather/')
+
+        for file_i in np.arange(len(weather_data)):
+            # sorting by date -> site -> param_code
+            for line_j in np.arange(len(weather_data[file_i])):
+                [year, _, date, angle] = time_to_angle(weather_data[file_i][line_j][2].replace(' 00:00:00', ''))
+
+                format_day_order = angle/360.
+                weather_data[file_i][line_j].append(int(year) + format_day_order)
+                weather_data[file_i][line_j][0] = int(weather_data[file_i][line_j][0])
+
+            weather_data[file_i] = sorted(weather_data[file_i], key=itemgetter(len(weather_data[file_i][line_j])-1, 0, 1))
+
+            print('Sorted complete.')
+
+            keep_date = ''
+            keep_site = ''
+            for line_j in np.arange(len(weather_data[file_i])):
+                # a new site
+                if weather_data[file_i][line_j][0] != keep_site:
+                    if keep_site != '':
+                        y_d_h_data[year][date]['weather'][keep_site] = weather_vector
+                        print(year + '/' + date + ': site- %s' % keep_site)
+                    keep_site = weather_data[file_i][line_j][0]
+
+                    weather_vector = []
+
+
+                # a new day
+                if weather_data[file_i][line_j][2].replace(' 00:00:00', '') != keep_date:
+                    if keep_date != '' and len(weather_vector) != 0:
+                        y_d_h_data[year][date]['weather'][keep_site] = weather_vector
+                        print(year + '/' + date + ': site- %s' % keep_site)
+
+                    keep_date = weather_data[file_i][line_j][2].replace(' 00:00:00', '')
+                    year = keep_date[:keep_date.find('/')]
+                    date = keep_date[keep_date.find('/')+1:]
+
+                    # check/create year dict., ex: 2016, 2015
+                    if not (year in y_d_h_data):
+                        y_d_h_data[year] = dict()
+                    # check/create date dict., ex: 1/1, 10/31
+                    if not (date in y_d_h_data[year]):
+                        y_d_h_data[year][date] = dict()
+                    # weather sites dict.
+                    if not('weather' in y_d_h_data[year][date]):
+                        y_d_h_data[year][date]['weather'] = dict()
+
+                    weather_vector = []
+
+                # Initiate weather_vector, when 'a new day' or 'a new site'.
+                if len(weather_vector) == 0:
+                    for each_hour in np.arange(24):
+                        weather_vector.append(['-' for i in np.arange(num_weather_property)])
+
+                # collecting data
+                for each_hour in np.arange(24):
+                    weather_vector[each_hour][param_code_to_param_code_no(weather_data[file_i][line_j][1])] \
+                        = weather_data[file_i][line_j][3+each_hour]  # the first three element mean site, param_code and date
+
+                if line_j == len(weather_data[file_i])-1:  # the last day
+                    y_d_h_data[year][date]['weather'][keep_site] = weather_vector
+            print('----')
 
         print('Saving .. ')
         for years in y_d_h_data.keys():
