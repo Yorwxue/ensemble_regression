@@ -6,6 +6,7 @@ from __future__ import print_function
 import numpy as np
 import time
 import cPickle
+import os
 
 import xgboost as xgb
 import matplotlib.pyplot as plt
@@ -35,68 +36,70 @@ def time_spent_printer(start_time, final_time):
 
 
 pollution_site_map = {
-    '中部': {'台中': ['大里', '忠明', '沙鹿', '西屯', '豐原'],
-           '南投': ['南投', '竹山'],
-           '彰化': ['二林', '彰化']},
+    '中部': {'台中': ['大里', '忠明', '沙鹿', '西屯', '豐原'],  # 5
+           '南投': ['南投', '竹山'],  # 2
+           '彰化': ['二林', '彰化']},  # 2
 
-    '北部': {'台北': ['中山', '古亭', '士林', '松山', '萬華'],
-           '新北': ['土城', '新店', '新莊', '板橋', '林口', '汐止', '菜寮', '萬里'],
-           '基隆': ['基隆'],
-           '桃園': ['大園', '平鎮', '桃園', '龍潭']},
+    '北部': {'台北': ['中山', '古亭', '士林', '松山', '萬華'],  # 5
+           '新北': ['土城', '新店', '新莊', '板橋', '林口', '汐止', '菜寮', '萬里'],  # 8
+           '基隆': ['基隆'],  # 1
+           '桃園': ['大園', '平鎮', '桃園', '龍潭']}, # 4
 
-    '宜蘭': {'宜蘭': ['冬山', '宜蘭']},
+    '宜蘭': {'宜蘭': ['冬山', '宜蘭']},  # 2
 
-    '竹苗': {'新竹': ['新竹', '湖口', '竹東'],
-           '苗栗': ['三義', '苗栗']},
+    '竹苗': {'新竹': ['新竹', '湖口', '竹東'],  # 3
+           '苗栗': ['三義', '苗栗']},  # 2
 
-    '花東': {'花蓮': ['花蓮'],
-           '台東': ['臺東']},
+    '花東': {'花蓮': ['花蓮'],  # 1
+           '台東': ['臺東']},  # 1
 
     '北部離島': {'彭佳嶼': []},
 
-    '西部離島': {'金門': ['金門'],
-             '連江': ['馬祖'],
+    '西部離島': {'金門': ['金門'], # 1
+             '連江': ['馬祖'],  # 1
              '東吉嶼': [],
-             '澎湖': ['馬公']},
+             '澎湖': ['馬公']},  # 1
 
-    '雲嘉南': {'雲林': ['崙背', '斗六'],
-            '台南': ['善化', '安南', '新營', '臺南'],
-            '嘉義': ['嘉義', '新港', '朴子']},
+    '雲嘉南': {'雲林': ['崙背', '斗六', '竹山'],  # 3
+            '台南': ['善化', '安南', '新營', '臺南'],  # 4
+            '嘉義': ['嘉義', '新港', '朴子']},  # 3
 
-    '高屏': {'高雄': ['仁武', '前金', '大寮', '小港', '左營', '林園', '楠梓', '美濃'],
-           '屏東': ['屏東', '恆春', '潮州']}
+    '高屏': {'高雄': ['仁武', '前金', '大寮', '小港', '左營', '林園', '楠梓', '美濃'],  # 8
+           '屏東': ['屏東', '恆春', '潮州']}  # 3
 }
 
 
-high_alert = 53.5
-low_alert = 35.5
+high_alert = 150.5
+low_alert = 100.5
 
-local = '北部'
-city = '台北'
-site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
-target_site = '萬華'
-
-training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
-testing_year = ['2017', '2017']
-
-training_duration = ['1/1', '12/31']
-testing_duration = ['1/1', '1/31']
-interval_hours = 8  # predict the label of average data of many hours later, default is 1
-is_training = True
-
-# local = os.sys.argv[1]
-# city = os.sys.argv[2]
-# site_list = pollution_site_map[local][city]
-# target_site = os.sys.argv[3]
+# local = '中部'  # 高屏 北部 中部
+# city = '台中'  # 高雄 台北 台中
+# site_list = pollution_site_map[local][city]  # ['中山', '古亭', '士林', '松山', '萬華']
+# target_site = '大里'  # 左營 中山 小港 大里
 #
-# training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
-# testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
+# training_year = ['2014', '2016']  # change format from   2014-2015   to   ['2014', '2015']
+# testing_year = ['2017', '2017']
 #
-# training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
-# testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
-# interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
-# is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
+# training_duration = ['1/1', '12/31']
+# testing_duration = ['1/1', '1/31']
+# interval_hours = 8  # predict the label of average data of many hours later, default is 1
+# is_training = True
 
+local = os.sys.argv[1]
+city = os.sys.argv[2]
+site_list = pollution_site_map[local][city]
+target_site = os.sys.argv[3]
+
+training_year = [os.sys.argv[4][:os.sys.argv[4].index('-')], os.sys.argv[4][os.sys.argv[4].index('-')+1:]]  # change format from   2014-2015   to   ['2014', '2015']
+testing_year = [os.sys.argv[5][:os.sys.argv[5].index('-')], os.sys.argv[5][os.sys.argv[5].index('-')+1:]]
+
+training_duration = [os.sys.argv[6][:os.sys.argv[6].index('-')], os.sys.argv[6][os.sys.argv[6].index('-')+1:]]
+testing_duration = [os.sys.argv[7][:os.sys.argv[7].index('-')], os.sys.argv[7][os.sys.argv[7].index('-')+1:]]
+interval_hours = int(os.sys.argv[8])  # predict the label of average data of many hours later, default is 1
+is_training = True if (os.sys.argv[9] == 'True' or os.sys.argv[9] == 'true') else False  # True False
+
+# target_kind = 'PM2.5'
+target_kind = 'O3'  # 8 hours
 
 # clear redundancy work
 if training_year[0] == training_year[1]:
@@ -114,13 +117,11 @@ for i in range(rangeofYear):
 
 # Training Parameters
 # WIND_DIREC is a specific feature, that need to be processed, and it can only be element of input vector now.
-# target_kind = 'PM2.5'
-target_kind = 'O3'
 if target_kind == 'PM2.5':
     pollution_kind = ['PM2.5', 'O3', 'AMB_TEMP', 'RH', 'WIND_SPEED', 'WIND_DIREC']
 elif target_kind == 'O3':
-    pollution_kind = ['O3', 'NOx']
-data_update = True
+    pollution_kind = ['O3', 'NOx', 'AMB_TEMP', 'RH', 'WIND_SPEED', 'WIND_DIREC']
+data_update = False
 # batch_size = 24 * 7
 seed = 0
 
@@ -138,6 +139,7 @@ training_deadline = training_duration[-1][:training_duration[-1].index('/')]
 print('site: %s' % target_site)
 print('Training for %s/%s to %s/%s' % (training_year[0], training_duration[0], training_year[-1], training_duration[-1]))
 print('Testing for %s/%s to %s/%s' % (testing_year[0], testing_duration[0], testing_year[-1], testing_duration[-1]))
+print('Target: %s' % target_kind)
 
 
 # for interval
@@ -568,7 +570,7 @@ predictions = mean_y_train + std_y_train * pred
 print('rmse: %.5f' % (np.mean((Y_test - predictions)**2, 0)**0.5))
 
 
-def target_level(target, kind='PM2.5'):
+def target_level(target, kind='O3'):
     # target should be a 1d-list
     if kind == 'PM2.5':
         if (target >= 0) and (target < 11.5):                # 0-11
@@ -594,6 +596,22 @@ def target_level(target, kind='PM2.5'):
         else:
             print('error value: %d' % target)
             return 1
+    elif kind == 'O3':
+        if (target >= 0) and (target < 54.5):                # AQI 0~50
+            return 1
+        elif (target >= 54.5) and (target < 70.5):           # AQI 51~100
+            return 2
+        elif (target >= 70.5) and (target < 85.5):           # AQI 101~150
+            return 3
+        elif (target >= 85.5) and (target < 105.5):           # AQI 151~200
+            return 4
+        elif (target >= 105.5) and (target < 200.5):           # AQI 201~300
+            return 5
+        elif target >= 200.5:           # AQI 300
+            return 5
+        else:
+            print('error value: %d' % target)
+            return 1
 
 pred_label = np.zeros(len(predictions))
 real_target = np.zeros(len(Y_test))
@@ -601,10 +619,10 @@ real_target = np.zeros(len(Y_test))
 pred_label_true = 0.
 pred_label_false = 0.
 
-four_label_true = 0.0
-four_label_false = 0.0
+# four_label_true = 0.0
+# four_label_false = 0.0
 
-# calculate the accuracy of ten level
+# calculate the accuracy of AQI index
 for i in range(len(predictions)):
     pred_label[i] = target_level(predictions[i])
     real_target[i] = target_level(Y_test[i])
@@ -614,21 +632,9 @@ for i in range(len(predictions)):
     else:
         pred_label_false += 1
 
-    # four label
-    if (real_target[i] >= 1 and real_target[i] <= 3) and (pred_label[i] >= 1 and pred_label[i] <= 3):
-        four_label_true += 1
-    elif (real_target[i] >= 4 and real_target[i] <= 6) and (pred_label[i] >= 4 and pred_label[i] <= 6):
-        four_label_true += 1
-    elif (real_target[i] >= 7 and real_target[i] <= 9) and (pred_label[i] >= 7 and pred_label[i] <= 9):
-        four_label_true += 1
-    elif (real_target[i] >= 10) and (pred_label[i] >= 10):
-        four_label_true += 1
-    else:
-        four_label_false += 1
 
 # print('standard_prob_accuracy: %.5f' % (standard_prob_true / (standard_prob_true + standard_prob_false)))
-print('Ten level accuracy: %.5f' % (pred_label_true / (pred_label_true + pred_label_false)))
-print('Four level accuracy: %.5f' % (four_label_true / (four_label_true + four_label_false)))
+print('AQI level accuracy: %.5f' % (pred_label_true / (pred_label_true + pred_label_false)))
 print('--')
 
 # --
@@ -702,6 +708,14 @@ for each_value in range(len(Y_test)):
         else:
             ld += 1
 
+print('site: %s interval: %d' % (target_site, interval_hours))
+print('Training for %s/%s to %s/%s' % (training_year[0], training_duration[0], training_year[-1], training_duration[-1]))
+print('Testing for %s/%s to %s/%s' % (testing_year[0], testing_duration[0], testing_year[-1], testing_duration[-1]))
+print('Target: %s' % target_kind)
+print('Feature: ', pollution_kind)
+
+print('rmse: %.5f' % (np.mean((Y_test - predictions)**2, 0)**0.5))
+print('AQI level accuracy: %.5f' % (pred_label_true / (pred_label_true + pred_label_false)))
 
 # print('Two level accuracy: %f' % (two_label_true / (two_label_true + two_label_false)))
 print('high label: (%d, %d, %d, %d)' % (ha, hb, hc, hd))
@@ -723,10 +737,10 @@ if True:  # is_training:
     with open(root_path + 'result/%s/%s/%s/%s_training_%s_m%s_to_%s_m%s_testing_%s_m%s_ave%d.ods' % (local, city, target_kind, target_site, training_year[0], training_begining, training_year[-1], training_deadline, testing_year[0], testing_month, interval_hours), 'wt') as f:
         print('RMSE: %f' % (np.sqrt(np.mean((Y_test - predictions)**2))), file=f)
         f.write('\n')
-        print('Ten level accuracy: %f' % (pred_label_true / (pred_label_true + pred_label_false)), file=f)
+        print('AQI level accuracy: %f' % (pred_label_true / (pred_label_true + pred_label_false)), file=f)
         f.write('\n')
-        print('Four level accuracy: %f' % (four_label_true / (four_label_true + four_label_false)), file=f)
-        f.write('\n')
+        # print('Four level accuracy: %f' % (four_label_true / (four_label_true + four_label_false)), file=f)
+        # f.write('\n')
         print('alert_classification:, %d, %d, %d, %d' % (alert_a, alert_b, alert_c, alert_d), file=f)
         f.write('\n')
         # print('Two level accuracy: %f' % (two_label_true / (two_label_true + two_label_false)), file=f)

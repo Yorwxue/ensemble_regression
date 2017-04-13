@@ -1,10 +1,15 @@
 import numpy as np
 
 
-def time_to_angle(time):
+def time_to_angle(time):  # year/month/date
     year = time[:time.find('/')]
     month = time[time.find('/')+1:time.rfind('/')]
     date = time[time.rfind('/')+1:]
+    if int(year) <= 12:  # month/date/year
+        temp = year
+        year = date
+        date = month
+        month = temp
     # print(year+'/'+month+'/'+date)
 
     # date to 365 day
